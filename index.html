@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>London's Cholera Epidemic</title>
+	<script src="https://d3js.org/d3.v7.min.js" charset="utf-8"></script>
+	<style>
+    	text { 
+			font-family: Arial; 
+			font-size: 15px;
+		}
+		
+		.axis path, .axis line {
+			fill: none;
+			stroke: black;
+			shape-rendering: crispEdges;
+		}
+		
+		.tick text {
+			fill: black;
+			font-size: 11px;
+		}
+		
+		.bar {
+            fill: steelblue;
+        }
+		
+		circle:hover {
+			fill: black;
+		}
+		
+		dot:hover {
+			fill: black;
+		}
+		
+		rect {
+			stroke: white;
+		}
+		
+		path.line {
+			fill: none;
+			stroke: #000;
+		}
+		
+		.tooltip {
+			position: absolute;
+			text-align: center;
+			width: 90px;
+			height: 16px;
+			padding: 4px;
+			margin-top: -5px;
+			font: 10px sans-serif;
+			background: #ddd;
+			pointer-events: none;
+		}
+	</style>
+</head>
+<body>
+	<div id="tooltips"></div>
+	
+	<div id="divMap" align="center">
+		<svg id="map" width="700" height="550">
+			<text id="label" x="130" y="40" style="font-size: 26px">1854 Broad Street Cholera Outbreak</text>
+		</svg>
+	</div>
+	
+	<div id="divTimeline" align="left">
+	</div>
+	
+	<div id="divCharts" align="center">
+		<svg id="timeline" width="700" height="300">
+			<text id="label" x="200" y="35" style="font-size: 26px">Timeline Chart of Deaths</text>
+			<text id="xlabel" x="305" y="290" style="font-size: 15px">Date</text>
+			<text id="ylabel" x="20" y="150" style="font-size: 15px" transform="translate(-130,200) rotate(270)">Deaths</text>
+		</svg>
+		<svg id="charts" width="700" height="300">
+			<text id="label" x="125" y="35" style="font-size: 26px">Distribution of Deaths by Sex and Age</text>
+			<text id="xlabel" x="305" y="290" style="font-size: 15px">Gender/Age</text>
+			<text id="ylabel" x="20" y="150" style="font-size: 15px" transform="translate(-130,200) rotate(270)">Deaths</text>
+			<div id="buttons">
+				<button id="gender_btn">Gender</button>
+				<button id="age_btn">Age</button>
+				<button id="gender_age_btn">Gender & Age</button>
+			</div>
+		</svg>
+	</div>
+
+	<script>
+		
+		// Declaring SVG variables
+		var svg_map = d3.select("#map")
+		var svg_timeline = d3.select("#timeline")
+		var svg_charts = d3.select("#charts")
+		
+		var scale = 30
+		var flip = 21
+		var interval = 20
+		
+		// Axis resource: https://d3-graph-gallery.com/graph/scatter_basic.html
+		// Declaring x & y scales for charting
+		var x_timeline = d3.scaleTime().range([50, 650]);
+		var y_timeline = d3.scaleLinear().range([250, 50]);
+		var x_gender = d3.scaleBand().range([50, 650]);
+		var y_gender = d3.scaleLinear().range([250, 50]);
+		var x_age = d3.scaleBand().range([50, 650]);
+		var y_age = d3.scaleLinear().range([250, 50]);
+		var x_gender_age = d3.scaleBand().range([50, 650]);
+		var y_gender_age = d3.scaleLinear().range([250, 50]);
+		var x_gender_age_sub = d3.scaleBand()
+		
+		// Declaring time parser
+		var parseTime = d3.timeParse("%d-%b");
+		
+		// Setting color brewer palatte
+		var male_color = "#beaed4";
+		var female_color = "#fdc086";
+		var pumps_color = "#7fc97f";
+		var color_scheme = [male_color, female_color, pumps_color];
+		
+		// Labels and colors for map legend
+		var labels = ["Male", "Female", "Pumps"]
+		var color = d3.scaleOrdinal()
+			.domain(labels)
+			.range(color_scheme);
+		
+		// Tooltip resource: https://d3-graph-gallery.com/graph/interactivity_tooltip.html#position
+		// Creating tooltip div
+		var tooltip = d3.select("#tooltips")
+			.append("div")
+			.style("opacity", 0)
+			.attr("class", "tooltip")
+			.style("background-color", "white")
+			.style("border", "solid")
+			.style("border-width", "1px")
+			.style("border-radius", "5px")
+			.style("padding", "20px")
+		
+		// Creating mouse functions for tooltips
+		var mouseover = function(d) {
+			tooltip
+				.style("opacity", 1)
+			d3.select(this)
+				.style("stroke", "black")
+				.style("opacity", 1)
+		}
+		
+		var mousemove_timeline = function(d) {
+			const formatTime = d3.timeFormat("%B %d");
+			tooltip
+				.html("Date: " + formatTime(d.target.__data__.date) + "</br>" + "Deaths: " + d.target.__data__.deaths + "</br>" + "Total Deaths: " + d.target.__data__.total)
+				.style("left", (event.pageX)+"px")
+				.style("top", (event.pageY)+"px")
+			filtered_data = d.target.__data__.total
+			getFilteredData(filtered_data)
+		}
+
+		var mousemove_gender = function(d) {
+			tooltip
+				.html("Sex: " + d.target.__data__.sex + "</br>" + "Deaths: " + d.target.__data__.total)
+				.style("left", (event.pageX)+"px")
+				.style("top", (event.pageY)+"px")
+		}
+		
+		var mousemove_age = function(d) {
+			tooltip
+				.html("Age Range: " + d.target.__data__.age_range + "</br>" + "Deaths: " + d.target.__data__.total)
+				.style("left", (event.pageX)+"px")
+				.style("top", (event.pageY)+"px")
+		}
+		
+		var mousemove_gender_age_male = function(d) {
+			tooltip
+				.html("Age Range: " + d.target.__data__.age_range + "</br>" + "Male Deaths: " + d.target.__data__.male)
+				.style("left", (event.pageX)+"px")
+				.style("top", (event.pageY)+"px")
+		}
+		
+		var mousemove_gender_age_female = function(d) {
+			tooltip
+				.html("Age Range: " + d.target.__data__.age_range + "</br>" + "Female Deaths: " + d.target.__data__.female)
+				.style("left", (event.pageX)+"px")
+				.style("top", (event.pageY)+"px")
+		}
+		
+		var mouseleave = function(d) {
+			tooltip
+				.style("opacity", 0)
+			d3.select(this)
+				.style("stroke", "none")
+		}
+		
+		// Legend resource: https://d3-graph-gallery.com/graph/custom_legend.html
+		// Dots for legend
+		svg_map.selectAll("mydots")
+			.data(labels)
+			.enter()
+			.append("circle")
+				.attr("cx", 25)
+				.attr("cy", function(d,i){ return 80 + i*20}) // 100 is where the first dot appears. 25 is the distance between dots
+				.attr("r", 7)
+				.style("fill", function(d){ return color(d)})
+		
+		// Labels for legend
+		svg_map.selectAll("mylabels")
+			.data(labels)
+			.enter()
+			.append("text")
+				.attr("x", 40)
+				.attr("y", function(d,i){ return 80 + i*20}) // 100 is where the first dot appears. 25 is the distance between dots
+				.style("fill", function(d){ return color(d)})
+				.text(function(d){ return d})
+				.attr("text-anchor", "left")
+				.style("alignment-baseline", "middle")
+		
+		// Function to filter deaths on map based on timeline barchart mousehover
+		function getFilteredData(filter) {
+			svg_map.selectAll("circle.deaths").remove()
+			var death_data = d3.csv("deaths_age_sex.csv").then(function(data) {
+				i = 1
+				for (var row = 0; row < data.length; row++) {
+					data[row].index = i
+					i++
+				};
+				var display_data = data.filter(function(d) { return d.index <= filter })
+				var deaths = svg_map.selectAll(".circle")
+					.remove()
+					.exit()
+					.data(display_data.map(d => d))
+				deaths.enter()
+					.append("circle")
+						.attr("class", "deaths")
+						.attr("cx", d => d.x*scale)
+						.attr("cy", d => (flip - d.y)*scale)				
+						.attr("r", 5)
+						.style("stroke", "black")
+						.attr("fill", function(d) {
+							if (d.gender == 0) {
+								return male_color 
+							}else {
+								return female_color
+							}
+						});
+			});
+		};
+		
+		// Creating map from the streets.json file
+		d3.json("streets.json").then(function(data) {
+			for (var group = 0; group < data.length; group++) {
+				var dataGroup = data[group]
+				for (var coord = 0; coord < (data[group].length - 1); coord++) {
+					var dataCoord = dataGroup[coord]
+					var dataCoord2 = dataGroup[coord+1]
+					svg_map.append("line")
+						.attr("class", "link")
+						.style("stroke","black")
+						.style("stroke-width", 1)
+						.attr("x1", dataCoord.x*scale)
+						.attr("y1", (flip - dataCoord.y)*scale)
+						.attr("x2", dataCoord2.x*scale)
+						.attr("y2", (flip - dataCoord2.y)*scale);
+				};
+			};
+		});
+		
+		// Adding pumps to map
+		d3.csv("pumps.csv").then(function(data) {
+			svg_map.selectAll(".circle")
+				.data(data.map(d => d))
+				.enter()
+				.append("circle")
+					.attr("class", "pumps")
+					.attr("cx", d => d.x*scale)
+					.attr("cy", d => (flip - d.y)*scale)				
+					.attr("r", 5)
+					.style("stroke", "black")
+					.attr("fill", pumps_color);
+		});
+		
+		// Bar chart resource: https://www.tutorialsteacher.com/d3js/create-bar-chart-using-d3js
+		// Creating timeline barchart for cholera deaths
+		d3.csv("deathdays.csv").then(function(data) {
+		    data.forEach(function(d) {
+			    d.date = parseTime(d.date);
+			});
+			
+			total_deaths = 0
+			for (var row = 0; row < data.length; row++) {
+				total_deaths = total_deaths + (+data[row].deaths)
+				data[row].total = +total_deaths
+			};
+		
+			x_timeline.domain(d3.extent(data, function(d) { return d.date; }));
+			y_timeline.domain([0, d3.max(data, function(d) { return +d.deaths; })]);
+			
+			svg_timeline.append("g")
+				.attr("transform", "translate(0,250)")
+				.call(d3.axisBottom(x_timeline));
+			svg_timeline.append("g")
+				.attr("transform", "translate(50,0)")
+				.call(d3.axisLeft(y_timeline));
+			svg_timeline.append("text")             
+				.attr("transform", "translate(0,0)")
+				.style("text-anchor", "middle")
+				.text("date");
+			svg_timeline.append("g")
+				.selectAll(".bar")
+				.data(data)
+				.enter()
+				.append("rect")		
+					.attr("class", "bar")
+					.attr("x", function(d) { return x_timeline(d.date); })
+					.attr("y", function(d) { return y_timeline(d.deaths); })
+					.attr("width", 13)
+					.attr("height", function(d) {  return 250 - y_timeline(d.deaths); })	
+					.on("mouseover", mouseover)
+					.on("mousemove", mousemove_timeline)
+					.on("mouseout", mouseleave);
+		});
+		
+		// Dynamic bar chart resource: https://gist.github.com/syncopika/f1c9036b0deb058454f825238a95b6be
+		// Other dynamic bar chart resource: https://plnkr.co/edit/Ccbs2wX0OJjH2WNSQvZS?p=preview&preview 
+		// Other other dynamic bar chart resource: https://stackoverflow.com/questions/50889602/switch-between-datasets-in-a-d3-barchart
+		// Grouped bar chart resource: https://d3-graph-gallery.com/graph/barplot_grouped_basicWide.html
+		// Aggregating data resource: https://stackoverflow.com/questions/37044713/how-can-we-sum-the-data-of-csv-file-columnwise-using-d3-js
+		// Creating various charts that allows deaths to be visualized based on age and gender
+		d3.csv("deaths_age_sex.csv").then(function(data) {
+			i = 1
+			for (var row = 0; row < data.length; row++) {
+				data[row].index = i
+				i++
+			};
+			
+			var group_ct = d3.rollup(data, v => v.length, d => d.age)
+			var age_total = [{age_range: "0-10", total: group_ct.get("0")},
+								{age_range: "11-20", total: group_ct.get("1")},
+								{age_range: "21-40", total: group_ct.get("2")},
+								{age_range: "41-60", total: group_ct.get("3")},
+								{age_range: "61-80", total: group_ct.get("4")},
+								{age_range: ">80", total: group_ct.get("5")}]
+			
+			var group_gender_ct = d3.rollup(data, v => v.length, d => d.age, d => d.gender)
+			var gender_age_total = [{age_range: "0-10", male: group_gender_ct.get("0").get("0"), female: group_gender_ct.get("0").get("1")},
+								{age_range: "11-20", male: group_gender_ct.get("1").get("0"), female: group_gender_ct.get("1").get("1")},
+								{age_range: "21-40", male: group_gender_ct.get("2").get("0"), female: group_gender_ct.get("2").get("1")},
+								{age_range: "41-60", male: group_gender_ct.get("3").get("0"), female: group_gender_ct.get("3").get("1")},
+								{age_range: "61-80", male: group_gender_ct.get("4").get("0"), female: group_gender_ct.get("4").get("1")},
+								{age_range: ">80", male: group_gender_ct.get("5").get("0"), female: group_gender_ct.get("5").get("1")}];
+			
+			var total_female = d3.sum(data.map(function(d){ return +d.gender}));
+			var total_male = data.length - total_female
+			var gender_total = [{sex: "male", total: total_male},{sex: "female", total: total_female}]
+			
+			var dynamic_bc_data = [gender_total, age_total, gender_age_total]
+			
+			x_gender.domain(dynamic_bc_data[0].map(d => d.sex));
+			y_gender.domain([0, 300]);		
+			x_age.domain(dynamic_bc_data[1].map(d => d.age_range));
+			y_age.domain([0, 200]);	
+			x_gender_age.domain(dynamic_bc_data[2].map(d => d.age_range));
+			y_gender_age.domain([0, 100]);	
+			x_gender_age_sub.domain(dynamic_bc_data[0].map(d => d.sex)).range([0, x_gender_age.bandwidth()]);
+			
+			svg_charts.append("g")
+				.attr("transform", "translate(0,250)")
+				.attr("id", "x-axis");
+			svg_charts.append("g")
+				.attr("transform", "translate(50,0)")
+				.attr("id", "y-axis");
+				
+			changeData('gender')
+			
+			function changeData(dataset) {
+				if (dataset == 'gender') {
+					updateBar(dynamic_bc_data[0]);
+				}
+				else if (dataset == 'age') {
+					updateBar(dynamic_bc_data[1]);
+				}
+				else if (dataset == 'gender_age') {
+					updateBar(dynamic_bc_data[2]);
+				}
+			}
+			
+			function updateBar(dataset) {
+				bw = .95
+				var bars = svg_charts.selectAll(".bar")
+					.remove()
+					.exit()
+					.data(dataset)
+				if (dataset == dynamic_bc_data[0]) { 
+					svg_charts.select("#x-axis")
+						.transition()
+						.call(d3.axisBottom(x_gender));
+					svg_charts.select("#y-axis")
+						.transition()
+						.call(d3.axisLeft(y_gender));
+					bars.enter()
+						.append("rect")
+							.attr("class", "bar")
+							.style("fill", function(d) {
+								if (d.sex == "male") {
+									return male_color 
+								}else {
+									return female_color
+								}
+							})
+							.attr("x", function(d) {return x_gender(d.sex)})
+							.attr("y", function(d) {return y_gender(d.total)})
+							.attr("width", x_gender.bandwidth()*bw)
+							.attr("height", function(d) {return 250 - y_gender(d.total)})
+							.on("mouseover", mouseover)
+							.on("mousemove", mousemove_gender)
+							.on("mouseout", mouseleave);
+				}
+				else if (dataset == dynamic_bc_data[1]) {
+					svg_charts.select("#x-axis")
+						.transition()
+						.call(d3.axisBottom(x_age));
+					svg_charts.select("#y-axis")
+						.transition()
+						.call(d3.axisLeft(y_age));
+					bars.enter()
+						.append("rect")
+							.attr("class", "bar")
+							.attr("x", function(d) {return x_age(d.age_range)})
+							.attr("y", function(d) {return y_age(d.total)})
+							.attr("width", x_age.bandwidth()*bw)
+							.attr("height", function(d) {return 250 - y_age(d.total)})
+							.on("mouseover", mouseover)
+							.on("mousemove", mousemove_age)
+							.on("mouseout", mouseleave);
+				}
+				else if (dataset == dynamic_bc_data[2]) {
+					svg_charts.select("#x-axis")
+						.transition()
+						.call(d3.axisBottom(x_gender_age));
+					svg_charts.select("#y-axis")
+						.transition()
+						.call(d3.axisLeft(y_gender_age));
+					bars.enter()
+						.append("rect")
+							.attr("class", "bar")
+							.attr("transform", d => `translate(${x_gender_age(d.age_range)},0)`)
+							.style("fill", male_color )
+							.attr("x", d => x_gender_age_sub("male"))
+							.attr("y", d => y_gender_age(d.male))
+							.attr("width", x_gender_age_sub.bandwidth()*bw)
+							.attr("height", d => { return 250 - y_gender_age(d.male) })
+							.on("mouseover", mouseover)
+							.on("mousemove", mousemove_gender_age_male)
+							.on("mouseout", mouseleave);
+					bars.enter()
+						.append("rect")
+							.attr("class", "bar")
+							.attr("transform", d => `translate(${x_gender_age(d.age_range)},0)`)
+							.style("fill", female_color )
+							.attr("x", d => x_gender_age_sub("female"))
+							.attr("y", d => y_gender_age(d.female))
+							.attr("width", x_gender_age_sub.bandwidth()*bw)
+							.attr("height", d => { return 250 - y_gender_age(d.female) })
+							.on("mouseover", mouseover)
+							.on("mousemove", mousemove_gender_age_female)
+							.on("mouseout", mouseleave);
+				}
+			}
+			
+			d3.select("#gender_btn").on("click", function() {changeData('gender')});
+			d3.select("#age_btn").on("click", function() {changeData('age')});
+			d3.select("#gender_age_btn").on("click", function() {changeData('gender_age')});
+			
+		});			
+	</script>
+	
+	<div id="link" align="center">
+		<a href='documentation.html' class='button'>Documentation & Video</a>
+		<p style="font-size: 100%;">Webpage Designed by Patrick Page, Masters in Applied Data Science, Course SP23-IN-INFO-H517-27897</p>
+	</div>
+	
+</body>
+
+
+</html>
