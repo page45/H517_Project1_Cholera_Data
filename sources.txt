@@ -1,0 +1,11 @@
+Sources:
+https://gist.github.com/d3noob/d6b306267ec7194c5f7cda11b1318824
+https://d3-graph-gallery.com/graph/scatter_basic.html - helped with axis
+https://stackoverflow.com/questions/37044713/how-can-we-sum-the-data-of-csv-file-columnwise-using-d3-js - aggregating data
+https://www.tutorialsteacher.com/d3js/create-bar-chart-using-d3js - creating bar chart
+https://stackoverflow.com/questions/50889602/switch-between-datasets-in-a-d3-barchart - helped w/ dynamic bar chart
+https://plnkr.co/edit/Ccbs2wX0OJjH2WNSQvZS?p=preview&preview - helped w/ dynamic bar chart
+https://gist.github.com/syncopika/f1c9036b0deb058454f825238a95b6be - helped w/ dynamic bar chart
+https://d3-graph-gallery.com/graph/barplot_grouped_basicWide.html - grouped bar chart
+https://d3-graph-gallery.com/graph/interactivity_tooltip.html#position - tooltips
+https://d3-graph-gallery.com/graph/custom_legend.html - legend
